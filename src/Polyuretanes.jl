@@ -29,7 +29,7 @@ function objective_function(p,ode_problem,experimental_data,sim_col)
   return f
 end
 
-function fit_parameters(p0,c0,tspan,reaction_network,experimental_data;max_failed_trials=100)
+function fit_parameters(p0,c0,tspan,reaction_network,experimental_data;max_failed_trials=10000)
 	x = [values(p0)...]
 	c0 = [values(c0)...]
 	ode_problem = ODEProblem(reaction_network,c0,tspan,x)
@@ -75,27 +75,6 @@ function reaction()
   return reaction 
 end
 
-IPDI_100_025 = (
-  experimental_data = [ 
-  0	    6.68445
-  1800	3.34223
-  3600	2.33956
-  5400	2.20587
-  7200	2.09223
-  14400	1.9786
-  21600	1.79812
-  28800	1.65106
-  43200	1.40374
-  86400	1.27005
-  129600	1.2032
-  172800	1.13636
-  259200	1.00267
-  345600	0.93582 ],
-  c0 = ( U = 5.01, NCO = 1.67, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
-  p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 2.77e-4, b = 2.70058, c = 0.49081),
-  tspan = (0.,350e3)
-)
-
 struct Result
   sys
   sim
@@ -108,11 +87,11 @@ function Base.show(io::IO,r::Result)
   println("Parameters: ")
   names = keys(r.sys.p0)
   for i in eachindex(r.x)
-    println(names[i]," = ",r.x[i])
+    println("    ",names[i]," = ",r.x[i])
   end
 end
 
-function fit(sys;max_failed_trials=100)
+function fit(sys;max_failed_trials=10000)
   reaction_network = reaction()
   p0 = sys.p0
   c0 = sys.c0
@@ -146,6 +125,31 @@ function plot_OH(result)
 		label="Experimental"
 	)
 	return plt
+end
+
+function datasets()
+
+BD_IPDI_110C_025 = (
+  experimental_data = readdlm("./data/bd_ipdi_110C_0.25.dat"),
+  c0 = ( U = 5.01, NCO = 1.67, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
+  p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 2.77e-4, b = 2.70058, c = 0.49081),
+  tspan = (0.,350e3)
+)
+
+BD_IPDI_110C_050 = (
+  experimental_data = readdlm("./data/bd_ipdi_110C_0.5.dat"),
+  c0 = ( U = 5.01, NCO = 1.67, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
+  p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 2.77e-4, b = 2.70058, c = 0.49081),
+  tspan = (0.,350e3)
+)
+
+BD_IPDI_110C_100 = (
+  experimental_data = readdlm("./data/bd_ipdi_110C_1.0.dat"),
+  c0 = ( U = 5.01, NCO = 1.67, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
+  p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 2.77e-4, b = 2.70058, c = 0.49081),
+  tspan = (0.,350e3)
+)
+
 end
 
 end # module
