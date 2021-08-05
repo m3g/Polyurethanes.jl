@@ -2,7 +2,6 @@ module Polyuretanes
 
 using Catalyst
 using DifferentialEquations
-using Optim
 
 export fit
 export simulate
@@ -118,22 +117,20 @@ struct Result
   score
   x
 end
+
 function Base.show(io::IO,r::Result)
   println("Score = ", r.score)
   print("Parameters = ", r.x)
 end
 
 function fit(sys)
-
   reaction_network = reaction()
   p0 = sys.p0
   c0 = sys.c0
   tspan = sys.tspan
   experimental_data = sys.experimental_data
-
   fbest, xbest = fit_parameters(p0,c0,tspan,reaction_network,experimental_data)
   sim = simulate(xbest,c0,tspan,reaction_network)
-
   return Result(sys, sim, fbest, xbest)
 end
 

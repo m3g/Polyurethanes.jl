@@ -3,6 +3,10 @@ uuid = "770902dd-bf43-47cf-89f4-4676401ab19a"
 authors = ["Leandro Martinez <leandro@iqm.unicamp.br> and contributors"]
 version = "0.1.0"
 
+[deps]
+Catalyst = "479239e8-5488-4da2-87a7-35f2df7eef83"
+DifferentialEquations = "0c46a032-eb83-5123-abaf-570d42b7fbaa"
+
 [compat]
 julia = "1"
 
