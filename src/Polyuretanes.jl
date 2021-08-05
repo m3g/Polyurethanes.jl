@@ -29,7 +29,7 @@ function objective_function(p,ode_problem,experimental_data,sim_col)
   return f
 end
 
-function fit_parameters(p0,c0,tspan,reaction_network,experimental_data)
+function fit_parameters(p0,c0,tspan,reaction_network,experimental_data;max_failed_trials=100)
 	x = [values(p0)...]
 	c0 = [values(c0)...]
 	ode_problem = ODEProblem(reaction_network,c0,tspan,x)
@@ -40,7 +40,7 @@ function fit_parameters(p0,c0,tspan,reaction_network,experimental_data)
   failed_trials = 0
   step = 0.1
   fbest = objective_function(xtrial,ode_problem,experimental_data,4)
-  while failed_trials < 100 || step > 1e-6
+  while failed_trials < max_failed_trials
     irand = rand(1:length(x))
     xtrial[irand] = x[irand] + -step*x[irand] + 2*step*x[irand]*rand()
     ftrial = objective_function(xtrial,ode_problem,experimental_data,4)
@@ -51,7 +51,6 @@ function fit_parameters(p0,c0,tspan,reaction_network,experimental_data)
       @show fbest, step
     else 
       failed_trials += 1
-      step = step/2
     end
   end
   return fbest, x
@@ -92,22 +91,8 @@ IPDI_100_025 = (
   172800	1.13636
   259200	1.00267
   345600	0.93582 ],
-  c0 = (
-  	U = 5.01,
-  	NCO = 1.67,
-  	DIPA_l = 0.,	
-  	OH = 6.68,
-  	POL = 0.,
-  	DIPA_v = 0.
-  ),
-  p0 = (
-  	k1 = 6.8e-6,
-  	km1 = 4.5e-4,
-  	k2 = 7.7e-5,
-  	A = 2.77e-4,
-  	b = 2.70058,
-  	c = 0.49081
-  ),
+  c0 = ( U = 5.01, NCO = 1.67, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
+  p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 2.77e-4, b = 2.70058, c = 0.49081),
   tspan = (0.,350e3)
 )
 
@@ -120,16 +105,23 @@ end
 
 function Base.show(io::IO,r::Result)
   println("Score = ", r.score)
-  print("Parameters = ", r.x)
+  println("Parameters: ")
+  names = keys(r.sys.p0)
+  for i in eachindex(r.x)
+    println(names[i]," = ",r.x[i])
+  end
 end
 
-function fit(sys)
+function fit(sys;max_failed_trials=100)
   reaction_network = reaction()
   p0 = sys.p0
   c0 = sys.c0
   tspan = sys.tspan
   experimental_data = sys.experimental_data
-  fbest, xbest = fit_parameters(p0,c0,tspan,reaction_network,experimental_data)
+  fbest, xbest = fit_parameters(
+    p0,c0,tspan,reaction_network,experimental_data,
+    max_failed_trials=max_failed_trials
+  )
   sim = simulate(xbest,c0,tspan,reaction_network)
   return Result(sys, sim, fbest, xbest)
 end
