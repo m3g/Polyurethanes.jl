@@ -7,26 +7,26 @@ using DelimitedFiles
 export fit
 export simulate
 export plot_OH
-export plot_all
+export plot_al
 
 function score(sim,experimental_data,sim_col)
-  score = 0.
   p = getindex.(sim.u,sim_col)
+  score = 0.
   for (t,val) in eachrow(experimental_data)
     i = findfirst(ts -> ts > t, sim.t)
     dpdt = (p[i]-p[i-1])/(sim.t[i]-sim.t[i-1])
     pred_at_t = p[i-1] + dpdt * (t-sim.t[i-1]) 
-    score += (val - pred_at_t)^2
+    score += (val-pred_at_t)^2
   end
-  return score
+  return score/(size(experimental_data,1))
 end
 
 function objective_function(x,ode_problem,experimental_data,sim_col)
-  f = try 
-    sim = solve(ode_problem,p=x,verbose=false)
-	  score(sim,experimental_data,sim_col)
-  catch
-    +Inf
+  sim = solve(ode_problem,p=x,verbose=false)
+  if retcode(sim) == :Success
+    f = score(sim,experimental_data,sim_col)
+  else
+    f = +Inf
   end
   return f
 end
@@ -50,8 +50,6 @@ function optimizer(x,f;max_failed_trials=10000,showprogress=false)
   step = 0.1
   fbest = f(x)
   while failed_trials < max_failed_trials
-#    irand = rand(1:length(x))
-#    xtrial[irand] = x[irand] + -step*x[irand] + 2*step*x[irand]*rand()
     @. xtrial = x + -step*x + (2*rand()*step)*x
     ftrial = f(xtrial)
     if ftrial < fbest
@@ -233,29 +231,29 @@ function objective_function_all(x,odes,systems,sim_col)
       return +Inf
     end
   end
-  return f
+  return f/length(systems)
 end
 
-function run_all(;max_failed_trials=10000,showprogress=true)
+function run_all(;
+  reaction = reaction1(),
+  max_failed_trials=10000,showprogress=true
+)
 
   systems = datasets("/home/leandro/.julia/dev/Polyuretanes/data")
-
-#  reaction_network = reaction1()
-  reaction_network = reaction2()
 
   odes = []
   for system in systems
     c0 = [values(system.c0)...]
     x = Float64[]
-    for par in params(reaction_network)
+    for par in params(reaction)
       push!(x,getfield(system.p0,Symbol(par)))
     end
     tspan = system.tspan
-    ode_problem = ODEProblem(reaction_network,c0,tspan,x)
+    ode_problem = ODEProblem(reaction,c0,tspan,x)
     push!(odes,ode_problem)
   end
   x0 = Float64[]
-  for par in params(reaction_network)
+  for par in params(reaction)
     push!(x0,getfield(systems[1].p0,Symbol(par)))
   end
   @. x0 = x0 + -x0 + rand()*x0
@@ -267,10 +265,10 @@ function run_all(;max_failed_trials=10000,showprogress=true)
   for system in systems
     c0 = [values(system.c0)...]
     tspan = system.tspan
-    sim = simulate(xbest,c0,tspan,reaction_network)
+    sim = simulate(xbest,c0,tspan,reaction)
     sim_score = score(sim,system.experimental_data,4)
     push!(r,Result(system, sim, sim_score,
-      ntuple(i -> Symbol(params(reaction_network)[i]) => xbest[i], length(xbest))))
+      ntuple(i -> Symbol(params(reaction)[i]) => xbest[i], length(xbest))))
   end
 
   return r, fbest
