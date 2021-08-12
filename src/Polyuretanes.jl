@@ -7,7 +7,7 @@ using DelimitedFiles
 export fit
 export simulate
 export plot_OH
-export plot_al
+export plot_all
 
 function score(sim,experimental_data,sim_col)
   p = getindex.(sim.u,sim_col)
@@ -21,53 +21,38 @@ function score(sim,experimental_data,sim_col)
   return score/(size(experimental_data,1))
 end
 
-function objective_function(x,ode_problem,experimental_data,sim_col)
-  sim = solve(ode_problem,p=x,verbose=false)
-  if retcode(sim) == :Success
-    f = score(sim,experimental_data,sim_col)
-  else
-    f = +Inf
-  end
-  return f
-end
-
-function fit_parameters(p0,c0,tspan,reaction_network,experimental_data;
-  max_failed_trials=10000,
-  showprogress=true
-)
-	x = [values(p0)...]
-	c0 = [values(c0)...]
-	ode_problem = ODEProblem(reaction_network,c0,tspan,x)
-	# the fourth column corresponds to the OH concentration
-	f(x) = objective_function(x,ode_problem,experimental_data,4)
-  fbest, x = optimizer(f,x,max_failed_trials=max_failed_trials,showprogress=showprogress)
-  return fbest, x
-end
-
 function optimizer(x,f;max_failed_trials=10000,showprogress=false)
-  xtrial = copy(x)
-  failed_trials = 0
-  step = 0.1
-  fbest = f(x)
-  while failed_trials < max_failed_trials
-    @. xtrial = x + -step*x + (2*rand()*step)*x
-    ftrial = f(xtrial)
-    if ftrial < fbest
-      failed_trials = 0
-      x .= xtrial
-      fbest = ftrial
-      showprogress && @show fbest, step
-    else 
-      failed_trials += 1
+    xbest = copy(x)
+    xtrial = copy(x)
+    failed_trials = 0
+    step = 1.
+    minstep = 1e-8
+    fbest = f(x)
+    itrial = 0
+    irand = 1
+    while failed_trials < max_failed_trials
+        itrial += 1
+        xtrial[irand] = xbest[irand] + -step*xbest[irand] + (2*rand()*step)*xbest[irand]
+        ftrial = f(xtrial)
+        if ftrial < fbest
+            failed_trials = 0
+            xbest .= xtrial
+            fbest = ftrial
+            showprogress && println("Trial $itrial: fbest = $fbest step = $step")
+            step = 1.
+        else 
+            irand = rand(1:length(x))
+            step = max(minstep,step/2)
+            failed_trials += 1
+        end
     end
-  end
-  return fbest, x
+    return fbest, xbest
 end
 
 function simulate(p0,c0,tspan,reaction_network)
-	x = [values(p0)...]
-	c0 = [values(c0)...]
-	ode_problem = ODEProblem(reaction_network,c0,tspan,x)
+  x = [values(p0)...]
+  c0 = [values(c0)...]
+  ode_problem = ODEProblem(reaction_network,c0,tspan,x)
   sim = solve(ode_problem,p=x)
   return sim
 end
@@ -105,25 +90,6 @@ function Base.show(io::IO,r::Result)
   for val in r.xbest
     println(val[1]," = ", val[2])
   end
-end
-
-function fit(
-  sys;
-  reaction_network = reaction1(),
-  max_failed_trials=10000,
-  showprogress=true
-)
-  p0 = sys.p0
-  c0 = sys.c0
-  tspan = sys.tspan
-  experimental_data = sys.experimental_data
-  fbest, xbest = fit_parameters(
-    p0,c0,tspan,reaction_network,experimental_data,
-    max_failed_trials=max_failed_trials,
-    showprogress=showprogress
-  )
-  sim = simulate(xbest,c0,tspan,reaction_network)
-  return Result(sys, sim, fbest, ntuple(i -> Symbol(params(reaction_network)[i]) => xbest[i], length(xbest)))
 end
 
 function plot_OH(result;title=nothing) 
@@ -176,7 +142,7 @@ function plot_all(
   plt = plot()
   for (i,r) in pairs(results)
     sim = r.sim
-    plot!(plt,sim.t/tscale,getindex.(sim.u,col),label=r.sys.concentration,color=i)
+    plot!(plt,sim.t/tscale,getindex.(sim.u,col),label=r.sys.label,color=i)
     scatter!(plt,r.sys.experimental_data[:,1]/tscale,r.sys.experimental_data[:,2],color=i)
   end
   plot!(plt,title=title)
@@ -185,61 +151,74 @@ function plot_all(
   return plt
 end
 
-function datasets(dir)
+Base.@kwdef struct ReactionSystem{C,P,T}
+  title::String
+  label::String
+  experimental_data::Matrix{Float64}
+  c0::C
+  p0::P
+  tspan::T
+end
 
-  return (
+function datasets(dir="/home/leandro/.julia/dev/Polyuretanes/data")
 
-    BD_IPDI_110C_100 = (
-      title = "BD IPDI 110C 1.00 mol/L",
-      concentration = "1.00 mol/L",
+  BD_IPDI_110C_100 = ReactionSystem(
+      title = "BD IPDI 110C 1",
+      label = "NCO/DIPA = 1",
       experimental_data = readdlm("$dir/bd_ipdi_110C_1.0.dat"),
-      c0 = ( U = 6.68, NCO = 0., DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
+      c0 = ( U = 6.68, NCO = 0., DIPA_l = 0., OH = 6.68, POL = 0., DIPA_v = 0.),
       p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 1.13e-6, b = 0.5),
       tspan = (0.,350e3)
-    ), 
-
-    BD_IPDI_110C_050 = (
-      title = "BD IPDI 110C 0.50 mol/L",
-      concentration = "0.50 mol/L",
-      experimental_data = readdlm("$dir/bd_ipdi_110C_0.5.dat"),
-      c0 = ( U = 3.34, NCO = 3.34, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
-      p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 1.13e-6, b = 0.5),
-      tspan = (0.,350e3)
-    ), 
-    
-    BD_IPDI_110C_025 = (
-      title = "BD IPDI 110C 0.25 mol/L",
-      concentration = "0.25 mol/L",
-      experimental_data = readdlm("$dir/bd_ipdi_110C_0.25.dat"),
-      c0 = ( U = 1.67, NCO = 5.01, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
-      p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 1.13e-6, b = 0.5),
-      tspan = (0.,350e3)
-    ), 
-    
   )
+  
+  BD_IPDI_110C_050 = ReactionSystem(
+    title = "BD IPDI 110C 0.5",
+    label = "NCP/DIPA = 0.5",
+    experimental_data = readdlm("$dir/bd_ipdi_110C_0.5.dat"),
+    c0 = ( U = 3.34, NCO = 3.34, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
+    p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 1.13e-6, b = 0.5),
+    tspan = (0.,350e3)
+  )
+    
+  BD_IPDI_110C_025 = ReactionSystem(
+    title = "BD IPDI 110C 0.25",
+    label = "NCO/DIPA = 0.25",
+    experimental_data = readdlm("$dir/bd_ipdi_110C_0.25.dat"),
+    c0 = ( U = 1.67, NCO = 5.01, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
+    p0 = ( k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 1.13e-6, b = 0.5),
+    tspan = (0.,350e3)
+  ) 
+    
+  return [BD_IPDI_110C_100, BD_IPDI_110C_050, BD_IPDI_110C_025] 
 
 end
 
-function objective_function_all(x,odes,systems,sim_col)
+function objective_function(x,odes,systems,sim_col)
   f = 0.
   for i in 1:length(systems)
     ode_problem = odes[i]
-    f += try 
-      sim = solve(ode_problem,p=x,verbose=false)
-      score(sim,systems[i].experimental_data,sim_col)
-    catch
+    sim = solve(ode_problem,p=x,verbose=false)
+    if sim.retcode == :Success
+      f += score(sim,systems[i].experimental_data,sim_col)
+    else
       return +Inf
     end
   end
   return f/length(systems)
 end
 
-function run_all(;
-  reaction = reaction1(),
+fit(
+  reaction=reaction1(), 
+  system::ReactionSystem=datasets()[1],
+  max_failed_trials=10000, showprogress=true
+) = 
+  fit(reaction, [system], max_failed_trials=max_failed_trials, showprogress=showprogress)
+
+function fit(
+  reaction=reaction1(),
+  systems=datasets("/home/leandro/.julia/dev/Polyuretanes/data");
   max_failed_trials=10000,showprogress=true
 )
-
-  systems = datasets("/home/leandro/.julia/dev/Polyuretanes/data")
 
   odes = []
   for system in systems
@@ -258,7 +237,7 @@ function run_all(;
   end
   @. x0 = x0 + -x0 + rand()*x0
 
-	f(x) = objective_function_all(x,odes,systems,4)
+  f(x) = objective_function(x,odes,systems,4)
   fbest, xbest = optimizer(x0,f,max_failed_trials=max_failed_trials,showprogress=showprogress)
 
   r = Result[]
@@ -273,5 +252,6 @@ function run_all(;
 
   return r, fbest
 end
+
 
 end # module
