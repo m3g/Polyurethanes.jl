@@ -1,6 +1,6 @@
-using Polyuretanes
+using Polyurethanes
 using Test
 
-@testset "Polyuretanes.jl" begin
+@testset "Polyurethanes.jl" begin
     # Write your tests here.
 end

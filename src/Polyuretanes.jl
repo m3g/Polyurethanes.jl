@@ -1,4 +1,4 @@
-module Polyuretanes
+module Polyurethanes
 
 using Plots, Plots.Measures
 using Catalyst
@@ -180,7 +180,7 @@ Base.@kwdef struct ReactionSystem{C,P,T}
     tspan::T
 end
 
-function datasets(dir="/home/leandro/.julia/dev/Polyuretanes/data")
+function datasets(dir="/home/leandro/.julia/dev/Polyurethanes/data")
 
     BD_IPDI_110C_100 = ReactionSystem(
         title="BD IPDI 110C 1",
@@ -293,7 +293,7 @@ end
 
 function fitall(
     reaction=reaction1(),
-    systems::Vector{<:ReactionSystem}=datasets("/home/leandro/.julia/dev/Polyuretanes/data");
+    systems::Vector{<:ReactionSystem}=datasets("/home/leandro/.julia/dev/Polyurethanes/data");
     opt=FitOptions()
 )
     # Fit each system independently
