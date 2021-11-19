@@ -1,16 +1,36 @@
 module Polyurethanes
 
+using DocStringExtensions
 using Plots, Plots.Measures
 using Catalyst
 using DifferentialEquations
-using DelimitedFiles
 using Printf
+using LaTeXStrings
 
 export fit
 export fitall
 export simulate
-export plot
+export plot, savefig
+export System
 
+import DelimitedFiles: readdlm
+export readdlm
+
+"""
+
+```
+score(sim, experimental_data, sim_col)
+```
+
+The score of these fits is the average squared *relative* deviation of a 
+each predicted value relative to a measured value. That is, for each 
+observation `val` we compute `((val - pred_at_t)/val)^2` where `pred_at_t`
+is thre predicted value from the simulation. The difference is divided 
+by `val` such that data spawning different orders of magnitude does not
+have a fit dominated by the larger values. The score is the average
+relative deviation of all data points. 
+
+"""
 function score(sim, experimental_data, sim_col)
     p = getindex.(sim.u, sim_col)
     score = 0.
@@ -20,10 +40,21 @@ function score(sim, experimental_data, sim_col)
         pred_at_t = p[i - 1] + dpdt * (t - sim.t[i - 1]) 
         score += ((val - pred_at_t)/val)^2
     end
-    return score / (size(experimental_data, 1))
+    score / (size(experimental_data, 1))
 end
 
-function optimizer(x, f, lower, upper;opt=FitOptions())
+"""
+
+```
+optimizer(x, f, lower, upper; opt=FitOptions())
+```
+
+This is a very simple and slow, yet robust global optimizer. It just perturbs
+the best point to obtain a new trial point, check if the function is properly
+evaluated at the new point, and keeps the best point so far. 
+
+"""
+function optimizer(x, f, lower, upper; opt=FitOptions())
     xbest = copy(x)
     xtrial = copy(x)
     failed_trials = 0
@@ -39,7 +70,11 @@ function optimizer(x, f, lower, upper;opt=FitOptions())
         itrial += 1
         xtrial[irand] = xbest[irand] + -step * xbest[irand] + (2 * rand() * step) * xbest[irand]
         xtrial[irand] = max(lower[irand],min(upper[irand],xtrial[irand]))
-        ftrial = f(xtrial)
+        ftrial = try 
+            f(xtrial)
+        catch
+            +Inf
+        end
         if ftrial < fbest
             failed_trials = 0
             xbest .= xtrial
@@ -66,38 +101,20 @@ function simulate(p0, c0, tspan, reaction_network)
     return sim
 end
 
-vap(OH,A,b) = A * exp(OH / b)
-
-function reaction1()
-    reaction = @reaction_network begin
-        (k1, km1), U <--> NCO + DIPA_l
-        k2, NCO + OH --> POL
-        vap(OH, A, b), DIPA_l --> DIPA_v
-    end k1 km1 k2 A b
-    return reaction 
-end
-    
-function reaction2()
-    reaction = @reaction_network begin
-        (k1, km1), U <--> NCO + DIPA_l
-        2.2e-4, NCO + OH --> POL
-        vap(OH, A, b), DIPA_l --> DIPA_v
-    end k1 km1 A b
-    return reaction 
-end
-
 struct Result
     sys
     sim
     score
     xbest
+    fbest
 end
 
 function Base.show(io::IO, r::Result)
-    println("Score = ", r.score)
-    println("Parameters: ")
+    println(io,"System = \"$(r.sys.label)\"")
+    println(io,"Score = ", r.score)
+    println(io,"Parameters: ")
     for val in r.xbest
-        println(val[1], " = ", val[2])
+        println(io,val[1], " = ", val[2])
     end
 end
 
@@ -106,8 +123,8 @@ function plot(
     species="OH"::String;
     labels=["Simulation","Experimental"],
     xlabel="time / hours",
-    ylabel="[$species] / mol/L",
-    title="",
+    ylabel=latexstring(raw"\textrm{["*"$species"*raw"] / mol~L^{-1}}"),
+    title=result.sys.label,
     tscale=3600
 ) 
 
@@ -143,7 +160,7 @@ function plot(
     results::AbstractVector{Result};
     species="OH",
     title="",
-    ylabel="[$species] / mol/L",
+    ylabel=latexstring(raw"\textrm{["*"$species"*raw"] / mol~L^{-1}}"),
     xlabel="time / hours",
     tscale=3600
 )
@@ -169,7 +186,7 @@ function plot(
     return plt
 end
 
-Base.@kwdef struct ReactionSystem{C,P,T}
+Base.@kwdef struct System{C,P}
     title::String
     label::String
     experimental_data::Matrix{Float64}
@@ -177,46 +194,6 @@ Base.@kwdef struct ReactionSystem{C,P,T}
     p0::P
     lower::P
     upper::P
-    tspan::T
-end
-
-function datasets(dir="/home/leandro/.julia/dev/Polyurethanes/data")
-
-    BD_IPDI_110C_100 = ReactionSystem(
-        title="BD IPDI 110C 1",
-        label="NCO/DIPA = 1",
-        experimental_data=readdlm("$dir/bd_ipdi_110C_1.0.dat"),
-        c0=(U = 6.68, NCO = 0., DIPA_l = 0., OH = 6.68, POL = 0., DIPA_v = 0.),
-        p0=(k1 = 6.8e-6, km1 = 4.5e-4, k2 = 2.2e-4, A = 1.13e-6, b = 0.5),
-        lower=(k1 = -Inf, km1 = -Inf, k2 = 1.7e-4, A = -Inf, b = -Inf),
-        upper=(k1 = +Inf, km1 = +Inf, k2 = 2.7e-4, A = +Inf, b = +Inf),
-        tspan=(0., 350e3)
-    )
-  
-    BD_IPDI_110C_050 = ReactionSystem(
-        title="BD IPDI 110C 0.5",
-        label="NCP/DIPA = 0.5",
-        experimental_data=readdlm("$dir/bd_ipdi_110C_0.5.dat"),
-        c0=(U = 3.34, NCO = 3.34, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
-        p0=(k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 1.13e-6, b = 0.5),
-        lower=(k1 = -Inf, km1 = -Inf, k2 = 1.7e-4, A = -Inf, b = -Inf),
-        upper=(k1 = +Inf, km1 = +Inf, k2 = 2.7e-4, A = +Inf, b = +Inf),
-        tspan=(0., 350e3)
-    )
-      
-    BD_IPDI_110C_025 = ReactionSystem(
-        title="BD IPDI 110C 0.25",
-        label="NCO/DIPA = 0.25",
-        experimental_data=readdlm("$dir/bd_ipdi_110C_0.25.dat"),
-        c0=(U = 1.67, NCO = 5.01, DIPA_l = 0.,	OH = 6.68, POL = 0., DIPA_v = 0.),
-        p0=(k1 = 6.8e-6, km1 = 4.5e-4, k2 = 7.7e-5, A = 1.13e-6, b = 0.5),
-        lower=(k1 = -Inf, km1 = -Inf, k2 = 1.7e-4, A = -Inf, b = -Inf),
-        upper=(k1 = +Inf, km1 = +Inf, k2 = 2.7e-4, A = +Inf, b = +Inf),
-        tspan=(0., 350e3)
-    ) 
-      
-    return [BD_IPDI_110C_100, BD_IPDI_110C_050, BD_IPDI_110C_025] 
-
 end
 
 function objective_function(x, odes, systems, sim_col)
@@ -233,23 +210,37 @@ function objective_function(x, odes, systems, sim_col)
     return f / length(systems)
 end
 
+"""
+
+$(TYPEDEF)
+
+$(TYPEDFIELDS)
+
+Optimizer options.
+
+"""
 Base.@kwdef struct FitOptions
     max_failed_trials::Int = 10_000
     max_initial_trials::Int = 100_000
     showprogress::Bool = true
 end
 
+function set_tspan(system)
+    tmax = maximum(@view(system.experimental_data[:,1]))
+    tspan = (0.,tmax + tmax/100)
+    return tspan
+end
+
 fit(reaction, 
-    system::ReactionSystem;
+    system::System;
     opt=FitOptions()
 ) = fit(reaction, [system], opt=opt)
 
 function fit(
     reaction,
-    systems::Vector{<:ReactionSystem};
+    systems::Vector{<:System};
     opt=FitOptions()
 )
-
     println("Building differential equation system... ")
     odes = []
     for system in systems
@@ -258,7 +249,7 @@ function fit(
         for par in params(reaction)
             push!(x, getfield(system.p0, Symbol(par)))
         end
-        tspan = system.tspan
+        tspan = set_tspan(system)
         ode_problem = ODEProblem(reaction, c0, tspan, x)
         push!(odes, ode_problem)
     end
@@ -279,40 +270,36 @@ function fit(
     r = Result[]
     for system in systems
         c0 = [values(system.c0)...]
-        tspan = system.tspan
+        tspan = set_tspan(system)
         sim = simulate(xbest, c0, tspan, reaction)
         sim_score = score(sim, system.experimental_data, 4)
-        push!(
-            r,Result(system, sim, sim_score,
-            ntuple(i -> Symbol(params(reaction)[i]) => xbest[i], length(xbest)))
+        push!(r,
+            Result(
+                system, sim, sim_score,
+                ntuple(i -> Symbol(params(reaction)[i]) => xbest[i], length(xbest)),
+                fbest
+            )
         )
     end
-
-    return r, fbest
+    if length(systems) == 1
+        return r[1]
+    else
+        return r
+    end
 end
 
 function fitall(
     reaction=reaction1(),
-    systems::Vector{<:ReactionSystem}=datasets("/home/leandro/.julia/dev/Polyurethanes/data");
+    systems::Vector{<:System}=datasets("/home/leandro/.julia/dev/Polyurethanes/data");
     opt=FitOptions()
 )
-    # Fit each system independently
-    individual_results = []
-    for system in systems
-        println("----------------------------------------------")
-        println("Fitting system $(system.title)...")
-        println("----------------------------------------------")
-        r = fit(reaction,system,opt=opt)
-        push!(individual_results, r[1])
-    end
-
     # Optimal overal fit
     println("----------------------------------------------")
     println("Fitting all systems...")
     println("----------------------------------------------")
     r = fit(reaction,systems,opt=opt)
 
-    return individual_results, r
+    return r
 end
 
 end # module
