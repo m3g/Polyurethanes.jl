@@ -25,7 +25,7 @@ dir = "./data"
 #
 # BD systems, without evaporation
 #
-bd_systems_noevap = [
+bd_noevap = [
     System(
         title="BD IPDI 110C 1",
         label="NCO/DIPA = 1.00",
@@ -55,28 +55,10 @@ bd_systems_noevap = [
     ) 
 ]
 
-# Fit each set independently
-bd_noevap_1 = fit(reaction_noevap,bd_systems_noevap[1])
-plot(bd_noevap_1)
-savefig("./plots/bd_noevap_1.png")
-
-bd_noevap_2 = fit(reaction_noevap,bd_systems_noevap[2])
-plot(bd_noevap_2)
-savefig("./plots/bd_noevap_2.png")
-
-bd_noevap_3 = fit(reaction_noevap,bd_systems_noevap[3])
-plot(bd_noevap_3)
-savefig("./plots/bd_noevap_3.png")
-
-# Obtain best overall fit
-bd_noevap = fitall(reaction_noevap,bd_systems_noevap)
-plot(bd_noevap)
-savefig("./plots/bd_noevap.png")
-
 #
 # BD systems with evaporation
 #
-bd_systems_evap = [ 
+bd_evap = [ 
     System(
         title="BD IPDI 110C 1",
         label="NCO/DIPA = 1.00",
@@ -106,24 +88,6 @@ bd_systems_evap = [
     ) 
 ]
       
-# Fit each set independently
-bd_evap_1 = fit(reaction_evap,bd_systems_evap[1])
-plot(bd_evap_1)
-savefig("./plots/bd_evap_1.png")
-
-bd_evap_2 = fit(reaction_evap,bd_systems_evap[2])
-plot(bd_evap_2)
-savefig("./plots/bd_evap_2.png")
-
-bd_evap_3 = fit(reaction_evap,bd_systems_evap[3])
-plot(bd_evap_3)
-savefig("./plots/bd_evap_3.png")
-
-# Obtain best overall fit
-bd_evap = fitall(reaction_evap,bd_systems_evap)
-plot(bd_evap)
-savefig("./plots/bd_evap.png")
-      
 #
 # PEG at 100oC, with evaporation
 #
@@ -148,20 +112,6 @@ peg_100_evap = [
     )
 ]
 
-# Fit each set independently
-peg100_evap_1 = fit(reaction_evap,peg_100_evap[1])
-plot(peg100_evap_1)
-savefig("./plots/peg100_evap_1.png")
-
-peg100_evap_2 = fit(reaction_evap,peg_100_evap[2])
-plot(peg100_evap_2)
-savefig("./plots/peg100_evap_2.png")
-
-# Obtain best overall fit
-peg100_evap = fitall(reaction_evap,peg_100_evap)
-plot(peg100_evap)
-savefig("./plots/peg100_evap.png")
-      
 #
 # PEG at 110oC, with evaporation
 #
@@ -186,20 +136,6 @@ peg_110_evap = [
     )
 ]
 
-# Fit each set independently
-peg110_evap_1 = fit(reaction_evap,peg_110_evap[1])
-plot(peg110_evap_1)
-savefig("./plots/peg110_evap_1.png")
-
-peg110_evap_2 = fit(reaction_evap,peg_110_evap[2])
-plot(peg110_evap_2)
-savefig("./plots/peg110_evap_2.png")
-
-# Obtain best overall fit
-peg110_evap = fitall(reaction_evap,peg_110_evap)
-plot(peg110_evap)
-savefig("./plots/peg110_evap.png")
-      
 #
 # PEG 100oC, without evaporation
 #
@@ -223,20 +159,6 @@ peg_100_noevap = [
         upper=(k1 = +Inf, k2 = +Inf)
     )
 ]
-
-# Fit each set independently
-peg100_noevap_1 = fit(reaction_noevap,peg_100_noevap[1])
-plot(peg100_noevap_1)
-savefig("./plots/peg100_noevap_1.png")
-
-peg100_noevap_2 = fit(reaction_noevap,peg_100_noevap[2])
-plot(peg100_noevap_2)
-savefig("./plots/peg100_noevap_2.png")
-
-# Obtain best overall fit
-peg100_noevap = fitall(reaction_noevap,peg_100_noevap)
-plot(peg100_noevap)
-savefig("./plots/peg100_noevap.png")
       
 #
 # PEG 110oC without evaporation
@@ -262,16 +184,31 @@ peg_110_noevap = [
     )
 ]
 
-# Fit each set independently
-peg110_noevap_1 = fit(reaction_noevap,peg_110_noevap[1])
-plot(peg110_noevap_1)
-savefig("./plots/peg110_noevap_1.png")
+function run_system(basename,systems,reaction)
+    # Fit each set independently
+    for (isys,system) in pairs(systems)
+        println("Running: ", system.title)
+        result = fit(reaction,system)
+        plt = plot(result)
+        savefig(plt,"./plots/$(basename)_$isys.png")
+        writecsv(result,"./simulations/$(basename)_$isys.csv")
+    end
+    # Obtain best overall fit
+    println("Running fit for all sets...")
+    result = fitall(reaction,systems)
+    plt = plot(result)
+    savefig(plt,"./plots/$basename.png")
+    writecsv(result,"./simulations/$(basename)_all.csv")
+end
 
-peg110_noevap_2 = fit(reaction_noevap,peg_110_noevap[2])
-plot(peg110_noevap_2)
-savefig("./plots/peg110_noevap_2.png")
+for (basename, system, reaction) in [ 
+                            ("bd_evap", bd_evap, reaction_evap), 
+                            ("bd_noevap", bd_noevap, reaction_noevap), 
+                            ("peg_100_evap", peg_100_evap, reaction_evap), 
+                            ("peg_100_noevap", peg_100_noevap, reaction_noevap), 
+                            ("peg_110_evap", peg_110_evap, reaction_evap), 
+                            ("peg_110_noevap", peg_110_noevap, reaction_noevap),
+                          ]
+    run_system(basename, system, reaction)
+end
 
-# Obtain best overall fit
-peg110_noevap = fitall(reaction_noevap,peg_110_noevap)
-plot(peg110_noevap)
-savefig("./plots/peg110_noevap.png")
