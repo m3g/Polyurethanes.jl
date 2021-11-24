@@ -10,11 +10,53 @@ using LaTeXStrings
 export fit
 export fitall
 export simulate
-export plot, savefig
+export plot, savefig, writecsv
 export System
 
 import DelimitedFiles: readdlm
 export readdlm
+
+struct Result
+    sys
+    sim
+    score
+    xbest
+    fbest
+end
+
+function Base.show(io::IO, r::Result)
+    println(io,"System = \"$(r.sys.label)\"")
+    println(io,"Score = ", r.score)
+    println(io,"Parameters: ")
+    for val in r.xbest
+        println(io,val[1], " = ", val[2])
+    end
+end
+
+Base.@kwdef struct System{C,P}
+    title::String
+    label::String
+    experimental_data::Matrix{Float64}
+    c0::C
+    p0::P
+    lower::P
+    upper::P
+end
+
+"""
+
+$(TYPEDEF)
+
+$(TYPEDFIELDS)
+
+Optimizer options.
+
+"""
+Base.@kwdef struct FitOptions
+    max_failed_trials::Int = 1_000
+    max_initial_trials::Int = 10_000
+    showprogress::Bool = true
+end
 
 """
 
@@ -101,101 +143,6 @@ function simulate(p0, c0, tspan, reaction_network)
     return sim
 end
 
-struct Result
-    sys
-    sim
-    score
-    xbest
-    fbest
-end
-
-function Base.show(io::IO, r::Result)
-    println(io,"System = \"$(r.sys.label)\"")
-    println(io,"Score = ", r.score)
-    println(io,"Parameters: ")
-    for val in r.xbest
-        println(io,val[1], " = ", val[2])
-    end
-end
-
-function plot(
-    result::Result,
-    species="OH"::String;
-    labels=["Simulation","Experimental"],
-    xlabel="time / hours",
-    ylabel=latexstring(raw"\textrm{["*"$species"*raw"] / mol~L^{-1}}"),
-    title=result.sys.label,
-    tscale=3600
-) 
-
-    icol = findfirst(x -> String(x) == species, keys(result.sys.c0))
-  
-    sim = result.sim
-    experimental_data = result.sys.experimental_data
-    default(
-        fontfamily="Computer Modern",
-        linewidth=2, framestyle=:box, label=nothing, grid=false,
-        margin=5mm
-    )
-    scalefontsizes()
-    scalefontsizes(1.2)
-  	plt = Plots.plot()
-  	plot!(plt,
-  	  	sim.t/tscale,
-        getindex.(sim.u, icol),
-  	  	xlabel=xlabel,
-  	  	ylabel=ylabel,
-  	  	label=labels[1]
-  	)
-  	scatter!(plt,
-  		experimental_data[:,1]/tscale,
-  		experimental_data[:,2],
-  		label=labels[2]
-  	)
-    plot!(plt, title=title)
-  	return plt
-end
-
-function plot(
-    results::AbstractVector{Result};
-    species="OH",
-    title="",
-    ylabel=latexstring(raw"\textrm{["*"$species"*raw"] / mol~L^{-1}}"),
-    xlabel="time / hours",
-    tscale=3600
-)
-    icol = findfirst(x -> String(x) == species, keys(results[1].sys.c0))
-
-    default(
-        fontfamily="Computer Modern",
-        linewidth=2, framestyle=:box, label=nothing, grid=false,
-        margin=5mm
-    )
-    scalefontsizes()
-    scalefontsizes(1.2)
-
-    plt = Plots.plot()
-    for (i, r) in pairs(results)
-    sim = r.sim
-        plot!(plt, sim.t / tscale, getindex.(sim.u, icol), label=r.sys.label, color=i)
-        scatter!(plt, r.sys.experimental_data[:,1] / tscale, r.sys.experimental_data[:,2], color=i)
-    end
-    plot!(plt, title=title)
-    plot!(plt, xlabel=xlabel, ylabel=ylabel)
-
-    return plt
-end
-
-Base.@kwdef struct System{C,P}
-    title::String
-    label::String
-    experimental_data::Matrix{Float64}
-    c0::C
-    p0::P
-    lower::P
-    upper::P
-end
-
 function objective_function(x, odes, systems, sim_col)
     f = 0.
     for i in 1:length(systems)
@@ -208,21 +155,6 @@ function objective_function(x, odes, systems, sim_col)
         end
     end
     return f / length(systems)
-end
-
-"""
-
-$(TYPEDEF)
-
-$(TYPEDFIELDS)
-
-Optimizer options.
-
-"""
-Base.@kwdef struct FitOptions
-    max_failed_trials::Int = 10_000
-    max_initial_trials::Int = 100_000
-    showprogress::Bool = true
 end
 
 function set_tspan(system)
@@ -300,6 +232,105 @@ function fitall(
     r = fit(reaction,systems,opt=opt)
 
     return r
+end
+
+function plot(
+    result::Result,
+    species="OH"::String;
+    labels=["Simulation","Experimental"],
+    xlabel="time / hours",
+    ylabel=latexstring(raw"\textrm{["*"$species"*raw"] / mol~L^{-1}}"),
+    title=result.sys.label,
+    tscale=3600
+) 
+
+    icol = findfirst(x -> String(x) == species, keys(result.sys.c0))
+  
+    sim = result.sim
+    experimental_data = result.sys.experimental_data
+    default(
+        fontfamily="Computer Modern",
+        linewidth=2, framestyle=:box, label=nothing, grid=false,
+        margin=5mm
+    )
+    scalefontsizes()
+    scalefontsizes(1.2)
+  	plt = Plots.plot()
+  	plot!(plt,
+  	  	sim.t/tscale,
+        getindex.(sim.u, icol),
+  	  	xlabel=xlabel,
+  	  	ylabel=ylabel,
+  	  	label=labels[1]
+  	)
+  	scatter!(plt,
+  		experimental_data[:,1]/tscale,
+  		experimental_data[:,2],
+  		label=labels[2]
+  	)
+    plot!(plt, title=title)
+  	return plt
+end
+
+function plot(
+    results::AbstractVector{Result};
+    species="OH",
+    title="",
+    ylabel=latexstring(raw"\textrm{["*"$species"*raw"] / mol~L^{-1}}"),
+    xlabel="time / hours",
+    tscale=3600
+)
+    icol = findfirst(x -> String(x) == species, keys(results[1].sys.c0))
+
+    default(
+        fontfamily="Computer Modern",
+        linewidth=2, framestyle=:box, label=nothing, grid=false,
+        margin=5mm
+    )
+    scalefontsizes()
+    scalefontsizes(1.2)
+
+    plt = Plots.plot()
+    for (i, r) in pairs(results)
+        sim = r.sim
+        plot!(plt, sim.t / tscale, getindex.(sim.u, icol), label=r.sys.label, color=i)
+        scatter!(plt, r.sys.experimental_data[:,1] / tscale, r.sys.experimental_data[:,2], color=i)
+    end
+    plot!(plt, title=title)
+    plot!(plt, xlabel=xlabel, ylabel=ylabel)
+
+    return plt
+end
+
+function writecsv(
+    result::Result, filename;
+    species="OH"::String,
+    ylabel="[$species] / mol/L",
+    xlabel="time / hours",
+    tscale=3600
+) 
+    icol = findfirst(x -> String(x) == species, keys(result.sys.c0))
+    sim = result.sim
+    title = replace(result.sys.title," " => "_")
+    file = dirname(filename)*"/"*title*"-"*basename(filename)
+    csv = open(file,"w")
+    println(csv,"# $(result.sys.title) - $(result.sys.label)")
+    println(csv,"# $xlabel, $ylabel")
+    for i in eachindex(sim.t)
+        t = sim.t[i]/tscale
+        y = getindex(sim.u[i],icol)
+        println(csv,"$t, $y")
+    end
+    close(csv)
+end
+
+function writecsv(
+    results::AbstractVector{Result}, filename;
+    kargs...
+)
+    for r in results
+        writecsv(r,filename;kargs...)
+    end
 end
 
 end # module
