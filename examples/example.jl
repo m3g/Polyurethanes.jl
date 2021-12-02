@@ -110,6 +110,15 @@ peg_100_evap = [
         lower=(k1 = 0., km1 = 0., k2 = 0., A = 0., b = -Inf),
         upper=(k1 = +Inf, km1 = +Inf, k2 = +Inf, A = +Inf, b = +Inf)
     )
+    System(
+        title="PEG IPDI 100C 1 100h",
+        label="NCO/DIPA = 1. (100h)",
+        experimental_data=readdlm("$dir/peg_ipdi_100C_1.0_100h.dat"),
+        c0=(U = 2.121362, NCO = 0., DIPA_l = 0., OH = 2.12136, POL = 0., DIPA_v = 0.),
+        p0=(k1 = 6.8e-6, km1 = 4.5e-4, k2 = 2.2e-4, A = 1.13e-6, b = 0.5),
+        lower=(k1 = 0., km1 = 0., k2 = 0., A = 0., b = -Inf),
+        upper=(k1 = +Inf, km1 = +Inf, k2 = +Inf, A = +Inf, b = +Inf)
+    )
 ]
 
 #
@@ -154,6 +163,15 @@ peg_100_noevap = [
         label="NCO/DIPA = 0.25",
         experimental_data=readdlm("$dir/peg_ipdi_100C_0.25.dat"),
         c0=(U = 0.627473, NCO = 1.882418, DIPA_l = 0., OH = 2.50989, POL = 0.),
+        p0=(k1 = 6.8e-6, k2 = 2.2e-4),
+        lower=(k1 = 0., k2 = 0.),
+        upper=(k1 = +Inf, k2 = +Inf)
+    )
+    System(
+        title="PEG IPDI 100C 1 100h",
+        label="NCO/DIPA = 1. (100h)",
+        experimental_data=readdlm("$dir/peg_ipdi_100C_1.0_100h.dat"),
+        c0=(U = 2.121362, NCO = 0., DIPA_l = 0., OH = 2.12136, POL = 0.),
         p0=(k1 = 6.8e-6, k2 = 2.2e-4),
         lower=(k1 = 0., k2 = 0.),
         upper=(k1 = +Inf, k2 = +Inf)
